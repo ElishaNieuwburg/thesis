@@ -7,10 +7,11 @@ from PIL import Image
 
 class WTDataset(torch.utils.data.Dataset):
 
-    def __init__(self, root: str):
+    def __init__(self, root: str, augmentations=False):
         self.imgs = os.path.join(root, "images")
         self.labels = os.path.join(root, "labels")
         self.data_list = self.create_data_list()
+        self.augmentations = augmentations
 
     def __len__(self) -> int:
         return len(os.listdir(self.imgs))
