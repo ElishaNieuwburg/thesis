@@ -3,6 +3,7 @@
 
 # Data
 /data/
+/output/
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks

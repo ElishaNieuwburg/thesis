@@ -1,23 +1,32 @@
 import os
 import sys
+import random
 import argparse
 import numpy as np
 import pandas as pd
+from helper import draw
+from PIL import Image, ImageDraw
 from Augmentation import Augmentation
 
 
-def create_df(root, img_path, label_path, augmentation=False):
-    imgs = os.path.join(root, img_path)
-    labels = os.path.join(root, label_path)
+def create_df(root, img_path, label_path, augmentation=False, augment_chance=0.5):
+    if augmentation:
+        chance = 1
+        augs = Augmentation()
+    else:
+        chance = 0
+    
+    final_img_path = os.path.join(root, img_path)
+    final_label_path = os.path.join(root, label_path)
 
     data_list = []
 
-    for index, img in enumerate(os.listdir(imgs)):
+    for index, img in enumerate(os.listdir(final_img_path)):
         data_point = [img]
         
         # See if there is a label for the image
         try:
-            f = open(os.path.join(labels, img[:-4] + '.txt'), 'r')
+            f = open(os.path.join(final_label_path, img[:-4] + '.txt'), 'r')
             data = np.array([line.strip().split(" ") for line in f.readlines()]).astype(float)
             f.close()
         
@@ -37,6 +46,22 @@ def create_df(root, img_path, label_path, augmentation=False):
 
             area = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
             data_point += [index, area]
+
+            if 2 in labels and chance > augment_chance:
+                img_read = Image.open(os.path.join(final_img_path, img))
+                og_draw_img = ImageDraw.Draw(img_read)
+                for box in boxes:
+                    l, r, t, b = draw(list(box), img_read.size)
+                    og_draw_img.rectangle([l, t, r, b], outline ="red", width=3)
+                img_read.show()
+                # new_img, new_boxes = augs.scale_img(img_read, boxes)
+                # draw_img = ImageDraw.Draw(new_img)
+                # for box in new_boxes:
+                #     l, r, t, b = draw(list(box), img_read.size)
+                #     draw_img.rectangle([l, t, r, b], outline ="red", width=3)
+                # new_img.show()
+                break
+
 
         data_list.append(data_point)
 

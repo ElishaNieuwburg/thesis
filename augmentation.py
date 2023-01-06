@@ -14,11 +14,11 @@ class Augmentation():
         self.contrast = random.uniform(1, 3)
         self.gamma = random.uniform(0.3, 2)
         self.hue = random.uniform(-0.5, 0.5)
-        self.kernel = random.randrange(1, 12, 2)
+        self.kernel = random.randrange(1, 20, 2)
         self.scale = 1.5
         # print(random.uniform(0.5, 1.5))
 
-    def flip_hor(image, boxes):
+    def flip_hor(self, image, boxes):
         image = F.hflip(image)
         boxes[:, [0, 2]] = 1 - boxes[:, [0, 2]]
         return image, boxes
@@ -57,14 +57,17 @@ class Augmentation():
         boxes[boxes > 1] = 1
         print("middle boxes", boxes)
         areas = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
-        new_boxes = np.array([])
-        for i, area in enumerate(areas):
-            if not math.isclose(area, 0, rel_tol=1e-5):
-                new_boxes = np.delete(boxes, (i), axis=0)
-                print(boxes)
+
+        # mask = (z[:, 0] == 6)
+        # z[mask, :]
+
+        # final_boxes = np.empty((0,4), float)
+        # for i, area in enumerate(areas):
+        #     if not math.isclose(area, 0, rel_tol=1e-5):
+        #         final_boxes = np.append(final_boxes, np.array([boxes[i]]), axis=0)
 
         print(areas)
-        print("final boxes", new_boxes)
+        print("final boxes", boxes)
 
         return image, boxes
 
