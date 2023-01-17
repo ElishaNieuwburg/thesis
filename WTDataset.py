@@ -1,4 +1,5 @@
 # Class for loading the data for Pytorch models
+# TODO: change to JSON file input
 import os
 import torch
 import numpy as np
@@ -56,7 +57,7 @@ class WTDataset(torch.utils.data.Dataset):
 
         return data_list
 
-    def __getitem__(self, idx: int) -> tuple:
+    def __getitem__(self, idx: int) -> tuple(Image, dict):
         data_pair = self.data_list[idx]
         img = Image.open(os.path.join(self.imgs, data_pair['img_name']))
         target = data_pair['target']
