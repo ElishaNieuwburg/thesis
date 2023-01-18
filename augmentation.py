@@ -1,11 +1,12 @@
 import random
 import numpy as np
-from PIL import Image
+from helper import draw
+from PIL import Image, ImageDraw
 from torchvision.transforms import functional as F
 
 
 # Flip the image and boxes horizontally
-def flip_hor(image: Image, boxes: np.ndarray) -> tuple(Image, np.array):
+def flip_hor(image: Image, boxes: np.ndarray) -> tuple():
     image = F.hflip(image)
     copied_boxes = np.copy(boxes)
     copied_boxes[:, [0, 2]] = 1 - copied_boxes[:, [0, 2]]
@@ -13,18 +14,27 @@ def flip_hor(image: Image, boxes: np.ndarray) -> tuple(Image, np.array):
 
 
 # Scale image and bounding boxes to certain scale
-def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float, alpha=1e-1) -> tuple(Image, np.ndarray, np.ndarray):
+def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float, alpha=1e-1, resize=True) -> tuple():
     # Resize image
     original_size = F.get_image_size(image)
     width = original_size[0] / scale
     height = original_size[1] / scale
-    image = F.resized_crop( image,
-                            (original_size[1] - height) / 2,
-                            (original_size[0] - width) / 2,
-                            height,
-                            width,
-                            [original_size[1], original_size[0]])
-    
+
+    if resize:
+        image = F.resized_crop( image,
+                                (original_size[1] - height) / 2,
+                                (original_size[0] - width) / 2,
+                                height,
+                                width,
+                                [original_size[1], original_size[0]])
+    else:
+        image = F.resized_crop( image,
+                                (original_size[1] - height) / 2,
+                                (original_size[0] - width) / 2,
+                                height,
+                                width,
+                                [int(height), int(width)])
+        
     # Resize the boxes according to scale
     copied_boxes = scale * (np.copy(boxes) - 0.5) + 0.5
 
@@ -48,8 +58,35 @@ def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float,
     return image, copied_boxes, labels
 
 
+def mosaic(images, boxes, labels):
+    size = F.get_image_size(images[0])
+    final_img = Image.new('RGB', (size))
+
+    for i in range(len(images)):
+        # images[i].show()
+        mod_i = i % 2
+        div_i = i // 2
+        cropped_img, cropped_boxes, cropped_labels = scale_img(images[i], boxes[i], labels[i], 2, alpha=0, resize=False)
+        draw_img = ImageDraw.Draw(cropped_img)
+        for box in cropped_boxes:
+            print(box)
+            # box[0] = 0.5 * box[0] + mod_i * 0.5
+            # box[1] = 0.5 * box[1] + div_i * 0.5
+            # box[2] = 0.5 * box[2] + mod_i * 0.5
+            # box[3] = 0.5 * box[3] + div_i * 0.5
+            l, r, t, b = draw(box, F.get_image_size(images[i]))
+            draw_img.rectangle([l, t, r, b], outline ="red", width=5)
+        cropped_img.show()
+
+        final_img.paste(cropped_img, (int(mod_i * size[0] * 0.5), int(div_i * size[1] * 0.5)))
+    
+    final_img.show()
+
+    return images, boxes, labels
+
+
 # Augment the image using multiple augmentation techniques
-def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=0.5, scale_chance=0.5) -> tuple(Image, np.ndarray, np.ndarray):
+def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=0.5, scale_chance=0.5) -> tuple():
     image = Image.open(image_path)
 
     # Flip horizontally

@@ -1,10 +1,53 @@
 import os
 import json
+import random
 import argparse
 import numpy as np
 from PIL import Image
 from augmentation import augment
 from torchvision.transforms import functional as F
+
+
+def train_test_val_split(data, train_split, test_split):
+    images = data['images']
+    n = len(data['images'])
+    random.shuffle(images)
+    split_index = int(train_split * n)
+    second_split_index = int(test_split * n) + split_index
+    train_imgs = images[:split_index]
+    test_imgs = images[split_index:second_split_index]
+    val_imgs = images[second_split_index:]
+    train_ids = [img['id'] for img in train_imgs]
+    test_ids = [img['id'] for img in test_imgs]
+
+    train_anns, test_anns, val_anns = [], [], []
+    for annotation in data['annotations']:
+        if annotation['image_id'] in train_ids:
+            train_anns.append(annotation)
+        elif annotation['image_id'] in test_ids:
+            test_anns.append(annotation)
+        else:
+            val_anns.append(annotation)
+    
+    train_dict = {
+                    "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
+                    "images": train_imgs,
+                    "annotations": train_anns
+                }
+    
+    test_dict = {
+                "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
+                "images": test_imgs,
+                "annotations": test_anns
+            }
+
+    val_dict = {
+                    "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
+                    "images": val_imgs,
+                    "annotations": val_anns
+                }
+
+    return train_dict, test_dict, val_dict
 
 
 def create_json(root: str, img_path: str, label_path: str, augmentation=False, count=5) -> None:    
@@ -111,6 +154,14 @@ def create_json(root: str, img_path: str, label_path: str, augmentation=False, c
     json_object = json.dumps(data_dict, indent=4)
     with open(os.path.join(root, "augment_json.json"), "w") as outfile:
         outfile.write(json_object)
+
+    splitted_data = train_test_val_split(data_dict, 0.7, 0.2)
+    names = ['train.json', 'test.json', 'val.json']
+    for i, dictionary in enumerate(splitted_data):
+        json_object = json.dumps(dictionary, indent=4)
+        with open(os.path.join(root, names[i]), "w") as outfile:
+            outfile.write(json_object)
+
 
 
 if __name__ == "__main__":

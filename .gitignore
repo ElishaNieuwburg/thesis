@@ -4,6 +4,7 @@
 # Data
 /data/
 /output/
+test.py
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
