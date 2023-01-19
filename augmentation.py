@@ -58,6 +58,7 @@ def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float,
     return image, copied_boxes, labels
 
 
+# TODO: fix mosaic bounding boxes scaling, does not work because of non resizing to original height and width
 def mosaic(images, boxes, labels):
     size = F.get_image_size(images[0])
     final_img = Image.new('RGB', (size))

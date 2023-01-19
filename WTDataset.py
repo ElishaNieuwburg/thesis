@@ -1,4 +1,3 @@
-# Class for loading the data for Pytorch models
 import os
 import json
 import torch
@@ -6,6 +5,7 @@ import numpy as np
 from PIL import Image
 
 
+# Class for loading Wind Turbine dataset for Pytorch object detection
 class WTDataset(torch.utils.data.Dataset):
 
     def __init__(self, root: str, file_name: str):
@@ -21,10 +21,13 @@ class WTDataset(torch.utils.data.Dataset):
         return len(self.imgs)
 
     def __getitem__(self, idx: int) -> tuple():
+        # Find image and annotation on index idx
         img_name = self.imgs[idx]['file_name']
         img_id = self.imgs[idx]['id']
         img = Image.open(os.path.join(self.root, img_name))
         annotation = next((item for item in self.annotations if item['image_id'] == img_id), None)
+
+        # Make all data into Pytorch tensors
         target =    {
                         'labels': torch.tensor(annotation['labels']),
                         'boxes': torch.tensor(annotation['bboxes']),
