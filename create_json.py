@@ -55,6 +55,7 @@ def train_test_val_split(data, train_split=0.7, test_split=0.2):
     return train_dict, test_dict, val_dict
 
 # Create JSON file of data and split into train, test and val JSONs
+# TODO: change to non normalized bounding box coordinates
 def create_json(root: str, img_path: str, label_path: str, augmentation=False, count=5) -> None:    
     final_img_path = os.path.join(root, img_path)
     final_label_path = os.path.join(root, label_path)
@@ -101,7 +102,8 @@ def create_json(root: str, img_path: str, label_path: str, augmentation=False, c
 
             # Change bounding box format to Pytorch (x0, y0, x1, y1)
             data_boxes = data[:, 1:]
-            boxes = np.concatenate((data_boxes[:, :2], data_boxes[:, :2] + data_boxes[:, 2:]), axis=1)
+            non_centred_box = data_boxes[:, :2] - 0.5 * data_boxes[:, 2:]
+            boxes = np.concatenate((non_centred_box, non_centred_box + data_boxes[:, 2:]), axis=1)
 
             # Create data point of annotation
             areas = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
