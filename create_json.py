@@ -1,4 +1,5 @@
 import os
+import copy
 import json
 import random
 import argparse
@@ -199,10 +200,11 @@ def create_json(root: str, img_path: str, label_path: str, out_path: str, aug_pa
 
     # Create a set amount of mosaic images from four random images from the dataset
     if aug_flag:
+        temp_dict = copy.deepcopy(data_dict)
         for i in range(num_mosaics):
-            images = random.sample(data_dict['images'], k=4)
+            images = random.sample(data_dict['aug_images'], k=4)
             img_paths = [os.path.join(root, img['folder'], img['file_name']) for img in images]
-            annotations = data_dict['annotations']
+            annotations = data_dict['aug_annotations']
             img_ids = [img['id'] for img in images]
             anns =  [annotations[img_id] for img_id in img_ids]
 
@@ -218,7 +220,7 @@ def create_json(root: str, img_path: str, label_path: str, out_path: str, aug_pa
                 mosaic_name = "mosaic_" + str(i) + ".PNG"
                 mosaic_img.save(os.path.join(root, aug_path, mosaic_name))
 
-                data_dict['aug_images'].append(
+                temp_dict['aug_images'].append(
                             {
                                 'id': image_id,
                                 'file_name': mosaic_name,
@@ -230,7 +232,7 @@ def create_json(root: str, img_path: str, label_path: str, out_path: str, aug_pa
 
                 mosaic_areas = (mosaic_boxes[:, 3] - mosaic_boxes[:, 1]) * (mosaic_boxes[:, 2] - mosaic_boxes[:, 0])
 
-                data_dict['aug_annotations'][image_id] = {
+                temp_dict['aug_annotations'][image_id] = {
                                                             'image_id': image_id,
                                                             'labels': mosaic_labels,
                                                             'bboxes': mosaic_boxes.tolist(),
@@ -239,6 +241,8 @@ def create_json(root: str, img_path: str, label_path: str, out_path: str, aug_pa
                                                         }
 
                 image_id += 1
+
+    data_dict = temp_dict
 
     # Write data to JSON file
     json_object = json.dumps(data_dict, indent=4)

@@ -54,7 +54,7 @@ def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float,
     for i, area in enumerate(areas):
         if area < alpha:
             indexes.append(i)
-        
+    
     copied_boxes = np.delete(copied_boxes, indexes, axis=0)
     copied_labels = np.delete(np.copy(labels), indexes, axis=0)
 
@@ -85,9 +85,9 @@ def mosaic(img_paths: list[str], boxes: list, labels: list) -> tuple():
         # Paste images into one mosaic image
         final_img.paste(cropped_img, (int(mod_i * size[0] * 0.5), int(div_i * size[1] * 0.5)))
         final_boxes.extend(cropped_boxes)
-        final_labels.extend(cropped_labels)
+        final_labels += cropped_labels.tolist()
 
-    return final_img, np.array(final_boxes), labels
+    return final_img, np.array(final_boxes), final_labels
 
 
 # Augment the image using multiple augmentation techniques
@@ -99,8 +99,8 @@ def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=
         image, boxes = flip_hor(image, boxes)
 
     # Change scale of image
-    if random.uniform(0, 1) > scale_chance:
-        image, boxes, labels = scale_img(image, boxes, labels, scale=random.uniform(0.5, 1.5))
+    # if random.uniform(0, 1) > scale_chance:
+    #     image, boxes, labels = scale_img(image, boxes, labels, scale=random.uniform(0.5, 1.5))
     
     # Adjust HSV and blur
     image = F.adjust_brightness(image, random.uniform(0.5, 1.5))
