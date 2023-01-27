@@ -1,40 +1,41 @@
 import random
 import numpy as np
-from helper import draw
-from PIL import Image, ImageDraw
+from PIL import Image
 from torchvision.transforms import functional as F
 
 
 # Flip the image and boxes horizontally
 def flip_hor(image: Image, boxes: np.ndarray) -> tuple():
     image = F.hflip(image)
+    width = F.get_image_size(image)[0]
     copied_boxes = np.copy(boxes)
-    copied_boxes[:, [0, 2]] = 1 - copied_boxes[:, [0, 2]]
+    copied_boxes[:, [0, 2]] = width - copied_boxes[:, [0, 2]]
     return image, copied_boxes
 
 
 # Scale image and bounding boxes to certain scale
-# TODO: change scaling function to work with non-normalized boxes
-def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float, alpha=1e-1, resize=True) -> tuple():
+def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float, alpha=800, resize=True) -> tuple():
     # Resize image
     original_size = F.get_image_size(image)
-    width = original_size[0] / scale
-    height = original_size[1] / scale
+    width = original_size[0]
+    height = original_size[1]
+    new_width = original_size[0] / scale
+    new_height = original_size[1] / scale
 
     if resize:
         image = F.resized_crop( image,
-                                (original_size[1] - height) / 2,
-                                (original_size[0] - width) / 2,
-                                height,
-                                width,
-                                [original_size[1], original_size[0]])
+                                (height - new_height) / 2,
+                                (width - new_width) / 2,
+                                new_height,
+                                new_width,
+                                [height, width])
     else:
         image = F.resized_crop( image,
-                                (original_size[1] - height) / 2,
-                                (original_size[0] - width) / 2,
-                                height,
-                                width,
-                                [int(height), int(width)])
+                                (height - new_height) / 2,
+                                (width - new_width) / 2,
+                                new_height,
+                                new_width,
+                                [int(new_height), int(new_width)])
         
     # Resize the boxes according to scale
     copied_boxes = np.copy(boxes)
@@ -42,62 +43,51 @@ def scale_img(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float,
     copied_boxes[:, [1, 3]] = scale * (copied_boxes[:, [1, 3]] - height / 2.) + height / 2.
 
     copied_boxes[copied_boxes < 0] = 0
-    copied_boxes[copied_boxes[:, 2] > width] = width
-    copied_boxes[copied_boxes[:, 3] > height] = height
-
+    copied_boxes[:, 0][copied_boxes[:, 0] > width] = width
+    copied_boxes[:, 1][copied_boxes[:, 1] > height] = height
+    copied_boxes[:, 2][copied_boxes[:, 2] > width] = width
+    copied_boxes[:, 3][copied_boxes[:, 3] > height] = height
 
     # Delete boxes with an area close to zero if zoomed in
-    # if scale > 1:
-    #     clipped_boxes = np.copy(copied_boxes)
+    areas = np.abs((copied_boxes[:, 3] - copied_boxes[:, 1]) * (copied_boxes[:, 2] - copied_boxes[:, 0]))
+    indexes = []
+    for i, area in enumerate(areas):
+        if area < alpha:
+            indexes.append(i)
+        
+    copied_boxes = np.delete(copied_boxes, indexes, axis=0)
+    copied_labels = np.delete(np.copy(labels), indexes, axis=0)
 
-    #     areas = (clipped_boxes[:, 3] - clipped_boxes[:, 1]) * (clipped_boxes[:, 2] - clipped_boxes[:, 0])
-    #     indexes = []
-    #     for i, area in enumerate(areas):
-    #         if np.isclose(area, 0, atol=alpha):
-    #             indexes.append(i)
-            
-    #     copied_boxes = np.delete(copied_boxes, indexes, axis=0)
-    #     copied_labels = np.delete(np.copy(labels), indexes, axis=0)
-
-    #     return image, copied_boxes, copied_labels
-    
-    return image, copied_boxes, labels
+    return image, copied_boxes, copied_labels
 
 
-# TODO: clean up and write comments, also implement it within framework
-def mosaic(images, boxes, labels):
+# Create 2x2 mosaic image from four images
+def mosaic(img_paths: list[str], boxes: list, labels: list) -> tuple():
+    images = [Image.open(img_paths[i]) for i in range(len(img_paths))]
     size = F.get_image_size(images[0])
     final_img = Image.new('RGB', (size))
     final_boxes = []
     final_labels = []
 
-    for i in range(len(images)):
-        # images[i].show()
+    for i in range(len(images)):        
+        # Scale every image with 2
+        cropped_img, cropped_boxes, cropped_labels = scale_img(images[i], boxes[i], labels[i], 2, resize=False)
+        
+        # Scale bounding boxes to mosaic image
         mod_i = i % 2
         div_i = i // 2
-        cropped_img, cropped_boxes, cropped_labels = scale_img(images[i], boxes[i], labels[i], 2, alpha=0, resize=False)
-        cropped_size = F.get_image_size(cropped_img)
-        cropped_boxes[cropped_boxes < 0] = 0
-        cropped_boxes[cropped_boxes > 1] = 1
-        # draw_img = ImageDraw.Draw(cropped_img)
         for box in cropped_boxes:
-            print(box)
-            box[0] = 0.5 * box[0] + mod_i * 0.5
-            box[1] = 0.5 * box[1] + div_i * 0.5
-            box[2] = 0.5 * box[2] + mod_i * 0.5
-            box[3] = 0.5 * box[3] + div_i * 0.5
-            print(box)
-        #     l, r, t, b = draw(box, cropped_size)
-        #     draw_img.rectangle([l, t, r, b], outline ="red", width=5)
-        # cropped_img.show()
+            box[0] = 0.5 * box[0] + mod_i * 0.5 * size[0]
+            box[1] = 0.5 * box[1] + div_i * 0.5 * size[1]
+            box[2] = 0.5 * box[2] + mod_i * 0.5 * size[0]
+            box[3] = 0.5 * box[3] + div_i * 0.5 * size[1]
 
+        # Paste images into one mosaic image
         final_img.paste(cropped_img, (int(mod_i * size[0] * 0.5), int(div_i * size[1] * 0.5)))
         final_boxes.extend(cropped_boxes)
         final_labels.extend(cropped_labels)
 
-    final_img.show()
-
-    return final_img, final_boxes, labels
+    return final_img, np.array(final_boxes), labels
 
 
 # Augment the image using multiple augmentation techniques

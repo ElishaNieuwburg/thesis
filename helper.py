@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # Find pixel coordinates for a YOLO format box
 def draw_yolo(box: np.ndarray, img_shape: list) -> float:
     x0  = (box[0] - np.abs(box[0] - box[2]) / 2.) * img_shape[0]
@@ -14,6 +15,7 @@ def draw_yolo(box: np.ndarray, img_shape: list) -> float:
 
     return x0, x1, y0, y1
 
+
 # Find pixel coordinates from normalized pascal_voc coordinates
 def draw(box: np.ndarray, img_shape: list) -> float:
     x0  = box[0] * img_shape[0]
@@ -27,3 +29,15 @@ def draw(box: np.ndarray, img_shape: list) -> float:
     y1 = min(y1, img_shape[1] - 1)
 
     return x0, x1, y0, y1
+
+
+# Create a name for the JSON file
+def create_name(data_type: str, augmented: bool, mixed: bool, chance: float, mosaic_num: int):
+    if augmented:
+        str_chance = str(chance).replace(".", "")
+        if mixed:
+            return data_type + "_mix_" + str_chance + "_" + str(mosaic_num) + ".json"
+        else:
+            return data_type + "_aug_" + str_chance + "_" + str(mosaic_num) + ".json"
+    else:
+        return data_type + ".json"
