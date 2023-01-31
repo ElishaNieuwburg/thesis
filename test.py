@@ -10,25 +10,6 @@ from augmentation import augment, mosaic, scale_img, flip_hor
 from torchvision.transforms import functional as F
 
 
-
-
-
-root = 'data/NordTank586x371/'
-images = os.listdir(os.path.join(root, "images"))
-random.shuffle(images)
-n = len(images)
-split_index = int(0.7 * n)
-second_split_index = int(0.2 * n) + split_index
-train_imgs = images[:split_index]
-test_imgs = images[split_index:second_split_index]
-val_imgs = images[second_split_index:]
-
-for img in train_imgs:
-    img_read = Image.open(os.path.join(root, img))
-    img_read.save(os.path.join(root, 'train', ))
-
-
-
 # file_name = 'augment_json.json'
 # json_file = open(os.path.join(root, file_name))
 # data = json.load(json_file)
