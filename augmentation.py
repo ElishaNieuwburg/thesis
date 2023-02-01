@@ -103,6 +103,7 @@ def mosaic(img_paths: list[str], boxes: dict, labels: dict) -> tuple():
 
 # Augment the image using multiple augmentation techniques
 def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=0.5, scale_chance=0.5) -> tuple():
+    random.seed(2)
     image = Image.open(image_path)
 
     # Flip horizontally
@@ -122,58 +123,3 @@ def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=
 
     return image, boxes, labels
     
-
-def flip_hor_yolo(image, boxes):
-    image = F.hflip(image)
-    width = F.get_image_size(image)[0]
-    copied_boxes = np.copy(boxes)
-    copied_boxes[:, [0]] = width - copied_boxes[:, [0]]
-    return image, copied_boxes
-
-# Scale image and bounding boxes to certain scale
-def scale_img_yolo(image: Image, boxes: np.ndarray, labels: np.ndarray, scale: float, alpha=800, resize=True) -> tuple():
-    # Resize image
-    original_size = F.get_image_size(image)
-    width = original_size[0]
-    height = original_size[1]
-    new_width = original_size[0] / scale
-    new_height = original_size[1] / scale
-
-    if resize:
-        image = F.resized_crop( image,
-                                (height - new_height) / 2,
-                                (width - new_width) / 2,
-                                new_height,
-                                new_width,
-                                [height, width])
-    else:
-        image = F.resized_crop( image,
-                                (height - new_height) / 2,
-                                (width - new_width) / 2,
-                                new_height,
-                                new_width,
-                                [int(new_height), int(new_width)])
-        
-    # Resize the boxes according to scale
-    copied_boxes = np.copy(boxes)
-    copied_boxes[:, [0, 2]] = scale * (copied_boxes[:, [0, 2]] - width / 2.) + width / 2.
-    copied_boxes[:, [1, 3]] = scale * (copied_boxes[:, [1, 3]] - height / 2.) + height / 2.
-
-    copied_boxes[copied_boxes < 0] = 0
-    copied_boxes[:, 0][copied_boxes[:, 0] > width] = width
-    copied_boxes[:, 1][copied_boxes[:, 1] > height] = height
-    copied_boxes[:, 2][copied_boxes[:, 2] > width] = width
-    copied_boxes[:, 3][copied_boxes[:, 3] > height] = height
-
-    # Delete boxes with an area close to zero if zoomed in
-    areas = np.abs((copied_boxes[:, 3] - copied_boxes[:, 1]) * (copied_boxes[:, 2] - copied_boxes[:, 0]))
-    indexes = []
-    for i, area in enumerate(areas):
-        if area < alpha:
-            indexes.append(i)
-    
-    copied_boxes = np.delete(copied_boxes, indexes, axis=0)
-    copied_labels = np.delete(np.copy(labels), indexes, axis=0)
-
-    return image, copied_boxes, copied_labels
-

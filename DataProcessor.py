@@ -29,6 +29,49 @@ class DataProcessor():
         random.seed(1)
 
 
+    def create_aug_images(self):
+        final_img_path = os.path.join(self.root, self.img_path)
+        final_label_path = os.path.join(self.root, self.label_path)
+
+        for img in os.listdir(final_img_path):
+            # See if there is a label for the image
+            try:
+                f = open(os.path.join(final_label_path, img[:-4] + '.txt'), 'r')
+                data = np.array([line.strip().split(" ") for line in f.readlines()]).astype(float)
+                f.close()
+            
+            # If there are no labels, continue to next iteration
+            except:
+                continue
+            
+            else:
+                # Give the image a data point
+                img_read = Image.open(os.path.join(final_img_path, img))
+                size = F.get_image_size(img_read)
+
+                # Change 0 label to 2 for Pytorch
+                labels = data[:, 0]
+                labels[data[:, 0] == 0] = 2
+
+                # Change bounding box format to Pytorch (x0, y0, x1, y1)
+                data_boxes = data[:, 1:]
+                boxes = yolo_to_voc(data_boxes, size)
+
+                aug_img, aug_boxes, aug_labels = augment(os.path.join(final_img_path, img), boxes, labels)
+
+                # If bounding boxes have disappeared in augmentation, don't save image
+                if len(aug_boxes) == 0:
+                    continue
+
+                final_boxes = voc_to_yolo(aug_boxes, size)
+
+                aug_img_name = img[:-4] + '_augmented'
+                aug_img.save(os.path.join(self.aug_root, self.img_path, aug_img_name + '.png'))
+
+                label_data = np.column_stack((aug_labels, final_boxes))
+                np.savetxt(os.path.join(self.aug_root, self.label_path, aug_img_name + '.txt'), label_data, fmt=['%i', '%f', '%f', '%f', '%f'])
+
+
     def create_json(self):
         final_img_path = os.path.join(self.root, self.img_path)
         final_label_path = os.path.join(self.root, self.label_path)
@@ -194,9 +237,11 @@ class DataProcessor():
                 outfile.write(json_object)
 
 
-    def create_augs(self, colab_path):
-        final_img_path = os.path.join(self.aug_root, self.img_path)
-        final_label_path = os.path.join(self.aug_root, self.label_path)
+    def create_augs(self):
+        final_img_path = os.path.join(self.root, self.img_path)
+        aug_img_path = os.path.join(self.aug_root, self.img_path)
+        final_label_path = os.path.join(self.root, self.label_path)
+        aug_label_path = os.path.join(self.aug_root, self.label_path)
 
         for img in os.listdir(final_img_path):
             # See if there is a label for the image
@@ -228,10 +273,10 @@ class DataProcessor():
                         aug_boxes = voc_to_yolo(boxes, size)
 
                         aug_img_name = img[:-4] + '_augmented'
-                        aug_img.save(os.path.join(final_img_path, aug_img_name + '.png'))
+                        aug_img.save(os.path.join(aug_img_path, aug_img_name + '.png'))
 
                         label_data = np.column_stack((aug_labels, aug_boxes))
-                        np.savetxt(os.path.join(final_label_path, aug_img_name + '.txt'), label_data, fmt=['%i', '%f', '%f', '%f', '%f'])
+                        np.savetxt(os.path.join(aug_label_path, aug_img_name + '.txt'), label_data, fmt=['%i', '%f', '%f', '%f', '%f'])
 
         # Create a set amount of mosaic images from four random images from the dataset
         if self.mosaic_flag:
@@ -270,8 +315,8 @@ class DataProcessor():
                     temp_imgs.append({'img': mosaic_img, 'label_data': label_data, 'name': mosaic_name})
 
             for element in temp_imgs:
-                element['img'].save(os.path.join(final_img_path, element['name'] + '.png'))
-                np.savetxt(os.path.join(final_label_path, element['name'] + '.txt'), element['label_data'], fmt=['%i', '%f', '%f', '%f', '%f'])
+                element['img'].save(os.path.join(aug_img_path, element['name'] + '.png'))
+                np.savetxt(os.path.join(aug_label_path, element['name'] + '.txt'), element['label_data'], fmt=['%i', '%f', '%f', '%f', '%f'])
 
 
     def create_sets(self, images, annotations, split_index, second_split_index):
@@ -366,11 +411,11 @@ class DataProcessor():
         for i in range(second_split_index, n):
             val.append(colab_path + '/' + images[i][:-3] + "png")
 
-        with open(os.path.join(self.root, 'train_testje.txt'), 'w') as f:
+        with open(os.path.join(self.root, 'train.txt'), 'w') as f:
             f.write('\n'.join(train))
 
-        with open(os.path.join(self.root, 'test_testje.txt'), 'w') as f:
+        with open(os.path.join(self.root, 'test.txt'), 'w') as f:
             f.write('\n'.join(test))
         
-        with open(os.path.join(self.root, 'val_testje.txt'), 'w') as f:
+        with open(os.path.join(self.root, 'val.txt'), 'w') as f:
             f.write('\n'.join(val))
