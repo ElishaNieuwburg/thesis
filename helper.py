@@ -1,5 +1,5 @@
 import numpy as np
-
+from copy import deepcopy
 
 # Find pixel coordinates for a YOLO format box
 def draw_yolo(box: np.ndarray, img_shape: list) -> float:
@@ -62,9 +62,10 @@ def yolo_to_voc(boxes, size):
 
 # Transform VOC format boxes to yolo boxes format
 def voc_to_yolo(boxes, size):
-    boxes[:, 0] = ((boxes[:, 0] + boxes[:, 2]) / 2) / size[0]
-    boxes[:, 1] = ((boxes[:, 1] + boxes[:, 3]) / 2) / size[1]
-    boxes[:, 2] = (boxes[:, 2] - boxes[:, 0]) / size[0]
-    boxes[:, 3] = (boxes[:, 3] - boxes[:, 1]) / size[1]
+    copied_boxes = deepcopy(boxes)
+    boxes[:, 0] = ((copied_boxes[:, 0] + copied_boxes[:, 2]) / 2) / size[0]
+    boxes[:, 1] = ((copied_boxes[:, 1] + copied_boxes[:, 3]) / 2) / size[1]
+    boxes[:, 2] = (copied_boxes[:, 2] - copied_boxes[:, 0]) / size[0]
+    boxes[:, 3] = (copied_boxes[:, 3] - copied_boxes[:, 1]) / size[1]
 
     return boxes

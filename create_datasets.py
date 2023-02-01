@@ -8,15 +8,15 @@ def create_datasets(root: str, img_path: str, label_path: str, out_path: str, au
     dataprocessor = DataProcessor(  root, img_path, label_path, out_path, aug_path,
                                     aug_flag, mix, chance, mosaic_flag, num_mosaics )
 
-    dataprocessor.create_aug_images()
+    # dataprocessor.create_aug_images()
 
-    # if out_path is not None:
-    #     dataprocessor.create_json()
-    # elif aug_flag:
-    #     dataprocessor.create_augs()
-    #     dataprocessor.create_files('/content/gdrive/MyDrive/data/AugmentedNordTank/images')
-    # else:
-    #     dataprocessor.create_files('/content/gdrive/MyDrive/data/NordTank586x371/images')
+    if out_path is not None:
+        dataprocessor.create_json()
+    elif aug_flag:
+        dataprocessor.create_augs('test')
+        dataprocessor.create_files('/content/gdrive/MyDrive/data/AugmentedNordTank/images')
+    else:
+        dataprocessor.create_files('/content/gdrive/MyDrive/data/NordTank586x371/images')
 
 
 if __name__ == "__main__":
