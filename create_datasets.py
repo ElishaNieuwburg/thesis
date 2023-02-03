@@ -2,19 +2,21 @@ import argparse
 from DataProcessor import DataProcessor
 
 
+# Create JSON or YAML like datasets with multiple flag options
 def create_datasets(root: str, img_path: str, label_path: str, out_path: str, aug_path: str,
                     aug_flag: bool, mix: bool, chance: float, mosaic_flag: bool, num_mosaics: int):
     
     dataprocessor = DataProcessor(  root, img_path, label_path, out_path, aug_path,
                                     aug_flag, mix, chance, mosaic_flag, num_mosaics )
 
+    # Creates augmented version of all images
     # dataprocessor.create_aug_images()
 
     if out_path is not None:
         dataprocessor.create_json()
     elif aug_flag:
-        dataprocessor.create_augs('test')
-        dataprocessor.create_files('/content/gdrive/MyDrive/data/AugmentedNordTank/images')
+        dataprocessor.create_dataset_augmented('1_1000')
+        dataprocessor.create_files('/content/gdrive/MyDrive/data/AugmentedNordTank/images', '1_1000')
     else:
         dataprocessor.create_files('/content/gdrive/MyDrive/data/NordTank586x371/images')
 
@@ -38,6 +40,5 @@ if __name__ == "__main__":
     parser.set_defaults(out=None, aug_path=None, augment=False, mix=False, chance=0.8, mosaic=False, no_mosaic=500)
     args = parser.parse_args()
 
-    # Create JSON with command line arguments
     create_datasets(args.root, args.images, args.labels, args.out, args.aug_path,
-    args.augment, args.mix, args.chance, args.mosaic, args.no_mosaic)
+                    args.augment, args.mix, args.chance, args.mosaic, args.no_mosaic)

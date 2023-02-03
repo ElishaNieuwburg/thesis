@@ -10,6 +10,8 @@ def flip_hor(image: Image, boxes: np.ndarray) -> tuple():
     width = F.get_image_size(image)[0]
     copied_boxes = np.copy(boxes)
     copied_boxes[:, [0, 2]] = width - copied_boxes[:, [0, 2]]
+
+    # Flip x0 and x1 of the boxes
     temp = np.copy(copied_boxes[:, 0])
     copied_boxes[:, 0] = copied_boxes[:, 2]
     copied_boxes[:, 2] = temp
@@ -77,6 +79,7 @@ def mosaic(img_paths: list[str], boxes: dict, labels: dict) -> tuple():
     final_labels = []
 
     for i in range(len(images)):
+        # Get the correct placement for each image in the final mosaic image
         mod_i = i % 2
         div_i = i // 2
         if i in boxes:
@@ -93,6 +96,8 @@ def mosaic(img_paths: list[str], boxes: dict, labels: dict) -> tuple():
             # Paste images into one mosaic image
             final_boxes.extend(cropped_boxes)
             final_labels += cropped_labels.tolist()
+        
+        # Add scaled version of image if it has no annotations
         else:
             cropped_img = scale_img(images[i], 2, resize=False, annotated=False)[0]
 
