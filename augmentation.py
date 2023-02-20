@@ -108,7 +108,6 @@ def mosaic(img_paths: list[str], boxes: dict, labels: dict) -> tuple():
 
 # Augment the image using multiple augmentation techniques
 def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=0.5, scale_chance=0.5) -> tuple():
-    random.seed(2)
     image = Image.open(image_path)
 
     # Flip horizontally

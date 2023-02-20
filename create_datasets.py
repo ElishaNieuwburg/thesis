@@ -1,24 +1,36 @@
+# Comment out what you need:
+# Splitting of annotated/non-annotated maps,
+# Creation of damage only dataset,
+# Creation of augmented images,
+# Creation of JSON, augmented and non-augmented datasets
 import argparse
 from DataProcessor import DataProcessor
 
 
-# Create JSON or YAML like datasets with multiple flag options
+# Creation of the different datasets
 def create_datasets(root: str, img_path: str, label_path: str, out_path: str, aug_path: str,
                     aug_flag: bool, mix: bool, chance: float, mosaic_flag: bool, num_mosaics: int):
     
     dataprocessor = DataProcessor(  root, img_path, label_path, out_path, aug_path,
                                     aug_flag, mix, chance, mosaic_flag, num_mosaics )
 
+    # Create annotated/non-annotated folders with images & labels
+    # dataprocessor.split_images('non_ann_images')
+    # dataprocessor.create_damage_dataset('/content/gdrive/MyDrive/data/DamageNT/images', 'damage')
+
     # Creates augmented version of all images
     # dataprocessor.create_aug_images()
 
+    # Create datasets
     if out_path is not None:
         dataprocessor.create_json()
     elif aug_flag:
         dataprocessor.create_dataset_augmented('1_1000')
         dataprocessor.create_files('/content/gdrive/MyDrive/data/AugmentedNordTank/images', '1_1000')
+        dataprocessor.to_json('1_1000')
     else:
         dataprocessor.create_files('/content/gdrive/MyDrive/data/NordTank586x371/images')
+        dataprocessor.to_json()
 
 
 if __name__ == "__main__":
