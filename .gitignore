@@ -2,7 +2,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=jupyternotebooks,python
 
 # Data
-/data/
+/local_data/
 /output/
 /test.py
 /experiments/
