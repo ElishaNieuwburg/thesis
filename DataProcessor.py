@@ -1,12 +1,12 @@
 import os
-import copy
 import json
 import random
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 from torchvision.transforms import functional as F
 from augmentation import augment, mosaic
-from helper import create_name, yolo_to_voc, voc_to_yolo
+from helper import yolo_to_voc, voc_to_yolo
 
 
 # Class for processing data into datasets
@@ -28,11 +28,11 @@ class DataProcessor():
         self.train_split = train_split
         self.test_split = test_split
         self.size = None
-        random.seed(1)
+        random.seed(1)  # Always use the same augmentation technique
 
 
-    # Create augmented version of all dirt images
-    def create_aug_images(self):
+    # Create an augmented version of all images for a certain class 'augment_class'
+    def create_aug_images(self, augment_class: int, multi_class=False):
         final_img_path = os.path.join(self.root, self.img_path)
         final_label_path = os.path.join(self.root, self.label_path)
         aug_img_path = os.path.join(self.aug_root, self.img_path)
@@ -61,8 +61,8 @@ class DataProcessor():
                 size = F.get_image_size(img_read)
                 labels = data[:, 0]
 
-                # Only augment dirt images
-                if 1 not in labels:
+                # Only augment images from the class specified in augment_class
+                if (1 ^ augment_class) not in labels:
                     data_boxes = data[:, 1:]
 
                     # Change bounding box format to Pytorch (x0, y0, x1, y1)
@@ -73,13 +73,16 @@ class DataProcessor():
                     if len(aug_boxes) == 0:
                         continue
 
+                    # If there is a single class, change all labels to 0
+                    if not multi_class:
+                        aug_labels[aug_labels == 1] = 0
+
                     # Change bounding box format back to YOLO
                     final_boxes = voc_to_yolo(aug_boxes, size)
 
-                    # Save image and label
+                    # Save image and label as YOLO txt file
                     aug_img_name = img[:-4] + '_augmented'
                     aug_img.save(os.path.join(aug_img_path, aug_img_name + '.png'))
-
                     label_data = np.column_stack((aug_labels, final_boxes))
                     np.savetxt(os.path.join(aug_label_path, aug_img_name + '.txt'), label_data, fmt=['%i', '%f', '%f', '%f', '%f'])
 
@@ -116,6 +119,9 @@ class DataProcessor():
             # Use augmented images for the mosaic
             aug_images = [os.path.join(self.aug_root, self.img_path, img) for img in os.listdir(aug_img_path)]
             
+            if self.size is None:
+                self.size = F.get_image_size(Image.open(aug_images[0]))
+
             # Store mosaic images temporarily, s.t. mosaics are not used in mosaic
             temp_imgs = []
             for i in range(self.num_mosaics):
@@ -171,6 +177,7 @@ class DataProcessor():
 
             aug_images = os.listdir(os.path.join(out_path, self.img_path))
 
+            # If mixed, put augmented images in train, test and val sets
             if self.mix:
                 images = os.listdir(os.path.join(self.root, self.img_path)) + aug_images
                 random.shuffle(images)
@@ -180,364 +187,42 @@ class DataProcessor():
                 random.shuffle(non_aug_images)
                 images = aug_images + non_aug_images
         else:
+            if folder is None:
+                out_path = self.root
+            else:
+                out_path = os.path.join(self.root, folder)
+            
             images = os.listdir(os.path.join(self.root, self.img_path))
-            out_path = self.root
-
-        # Get the split indexes given the train, test, val splits
-        n = len(images)
-        split_index = int(self.train_split * n)
-        second_split_index = int(self.test_split * n) + split_index
-
-        # Create all train, test, val img sets
-        train, test, val = [], [], []
-        for i in range(split_index):
-            train.append(colab_path + '/' + images[i][:-3] + "png")
-        
-        for i in range(split_index, second_split_index):
-            test.append(colab_path + '/' + images[i][:-3] + "png")
-        
-        for i in range(second_split_index, n):
-            val.append(colab_path + '/' + images[i][:-3] + "png")
-    
-        # Write to txt files
-        with open(os.path.join(out_path, 'train.txt'), 'w') as f:
-            f.write('\n'.join(train))
-
-        with open(os.path.join(out_path, 'test.txt'), 'w') as f:
-            f.write('\n'.join(test))
-        
-        with open(os.path.join(out_path, 'val.txt'), 'w') as f:
-            f.write('\n'.join(val))
-
-
-    # Create a dataset of only damage instances
-    def create_damage_dataset(self, colab_path: str, folder=None):
-        final_img_path = os.path.join(self.root, self.img_path)
-        final_label_path = os.path.join(self.root, self.label_path)
-        out_path = os.path.join(self.root, folder)
-
-        # Create new folders for the dataset
-        if not os.path.exists(final_img_path):
-            os.makedirs(final_img_path)
-        
-        if not os.path.exists(final_label_path):
-            os.makedirs(final_label_path)
-
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-        
-        all_images = os.listdir(final_img_path)
-        images = []
-
-        for img in all_images:
-            try:
-                f = open(os.path.join(final_label_path, img[:-4] + '.txt'), 'r')
-                data = np.array([line.strip().split(" ") for line in f.readlines()]).astype(float)
-                f.close()
-            except OSError:
-                continue
-            else:
-                labels = data[:, 0]
-
-                # Only augment dirt images
-                if 0 not in labels and random.uniform(0, 1) > (1 - self.chance):
-                    img_read = Image.open(os.path.join(self.root, self.img_path, img))
-                    size = F.get_image_size(img_read)
-                    data_boxes = data[:, 1:]
-
-                    # Change bounding box format to Pytorch (x0, y0, x1, y1)
-                    boxes = yolo_to_voc(data_boxes, size)
-                    aug_img, aug_boxes, aug_labels = augment(os.path.join(final_img_path, img), boxes, labels)
-                    aug_labels[aug_labels == 1] = 0
-
-                    # If bounding boxes have disappeared in augmentation, don't save image
-                    if len(aug_boxes) == 0:
-                        continue
-
-                    # Change bounding box format back to YOLO
-                    final_boxes = voc_to_yolo(aug_boxes, size)
-
-                    # Save image and label
-                    aug_img_name = img[:-4] + '_augmented'
-                    aug_img.save(os.path.join(self.root, folder, 'augmented', self.img_path, aug_img_name + '.png'))
-
-                    label_data = np.column_stack((aug_labels, final_boxes))
-                    np.savetxt(os.path.join(self.root, folder, 'augmented',self.label_path, aug_img_name + '.txt'), label_data, fmt=['%i', '%f', '%f', '%f', '%f'])
-
-                    images.append(aug_img_name + '.png')
-
-        # Add 10% non-annotated images to the dataset
-        non_ann_images = random.sample(os.listdir(os.path.join(self.root, 'non_ann_images')), k=int(0.1*len(images)))
-        images += non_ann_images
-        random.shuffle(images)
-
-        # Get the split indexes given the train, test, val splits
-        n = len(images)
-        split_index = int(self.train_split * n)
-        second_split_index = int(self.test_split * n) + split_index
-
-        # Create all train, test, val img sets
-        train, test, val = [], [], []
-        for i in range(split_index):
-            train.append(colab_path + '/' + images[i][:-3] + "png")
-        
-        for i in range(split_index, second_split_index):
-            test.append(colab_path + '/' + images[i][:-3] + "png")
-        
-        for i in range(second_split_index, n):
-            val.append(colab_path + '/' + images[i][:-3] + "png")
-    
-        # Write to txt files
-        with open(os.path.join(out_path, 'train.txt'), 'w') as f:
-            f.write('\n'.join(train))
-
-        with open(os.path.join(out_path, 'test.txt'), 'w') as f:
-            f.write('\n'.join(test))
-        
-        with open(os.path.join(out_path, 'val.txt'), 'w') as f:
-            f.write('\n'.join(val))
-
-
-    # TODO: Edit
-    def create_json(self):
-        final_img_path = os.path.join(self.root, self.img_path)
-        final_label_path = os.path.join(self.root, self.label_path)
-
-        if self.aug_flag:
-            data_dict = {
-                            "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
-                            "images": [],
-                            "annotations": {},
-                            "aug_images": [],
-                            "aug_annotations": {}
-                        }
-        else:
-            data_dict = {
-                            "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
-                            "images": [],
-                            "annotations": {},
-                        }
-        
-        image_id = 0
-
-        for img in os.listdir(final_img_path):
-            # See if there is a label for the image
-            try:
-                f = open(os.path.join(final_label_path, img[:-4] + '.txt'), 'r')
-                data = np.array([line.strip().split(" ") for line in f.readlines()]).astype(float)
-                f.close()
-            
-            # If there are no labels, continue to next iteration
-            except:
-                continue
-            
-            else:
-                # Give the image a data point
-                img_read = Image.open(os.path.join(final_img_path, img))
-                size = F.get_image_size(img_read)
-                data_dict['images'].append(
-                    {
-                        'id': image_id,
-                        'file_name': img,
-                        'folder': self.img_path,
-                        'height': size[1],
-                        'width': size[0]
-                    }
-                )
-
-                # Change 0 label to 2 for Pytorch
-                labels = data[:, 0]
-                labels[data[:, 0] == 0] = 2
-
-                # Change bounding box format to Pytorch (x0, y0, x1, y1)
-                data_boxes = data[:, 1:]
-                boxes = yolo_to_voc(data_boxes, size)
-
-                # Create data point of annotation
-                areas = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
-                data_dict['annotations'][image_id] = {
-                                                        'image_id': image_id,
-                                                        'labels': labels.tolist(),
-                                                        'bboxes': boxes.tolist(),
-                                                        'areas': areas.tolist(),
-                                                        'iscrowd': np.zeros((len(labels),), dtype=np.int64).tolist()
-                                                    }
-
-
-                # Only augment images with dirt labels
-                if self.aug_flag and 1 not in labels:
-                    if random.uniform(0, 1) > (1 - self.chance):
-                        image_id += 1
-                        aug_img, aug_boxes, aug_labels = augment(os.path.join(final_img_path, img), boxes, labels)
-
-                        # If bounding boxes have disappeared in augmentation, don't save image
-                        if len(aug_boxes) == 0:
-                            image_id -= 1
-                            continue
-
-                        aug_img_name = img[:-4] + "_augmented" + ".PNG"
-                        aug_img.save(os.path.join(self.root, self.aug_path, aug_img_name))
-
-                        # Create data point for augmented image and annotation
-                        data_dict['aug_images'].append(
-                            {
-                                'id': image_id,
-                                'file_name': aug_img_name,
-                                'folder': self.aug_path,
-                                'height': size[1],
-                                'width': size[0]
-                            }
-                        )
-
-                        aug_areas = (aug_boxes[:, 3] - aug_boxes[:, 1]) * (aug_boxes[:, 2] - aug_boxes[:, 0])
-
-                        data_dict['aug_annotations'][image_id] = {
-                                                                    'image_id': image_id,
-                                                                    'labels': aug_labels.tolist(),
-                                                                    'bboxes': aug_boxes.tolist(),
-                                                                    'areas': aug_areas.tolist(),
-                                                                    'iscrowd': np.zeros((len(labels),), dtype=np.int64).tolist()
-                                                                }
-
-                image_id += 1
-
-        # Create a set amount of mosaic images from four random images from the dataset
-        if self.mosaic_flag:
-            temp_dict = copy.deepcopy(data_dict)
-            for i in range(self.num_mosaics):
-                images = random.sample(data_dict['aug_images'], k=4)
-                img_paths = [os.path.join(self.root, img['folder'], img['file_name']) for img in images]
-                annotations = data_dict['aug_annotations']
-                img_ids = [img['id'] for img in images]
-                anns =  [annotations[img_id] for img_id in img_ids]
-
-                # Create mosaic
-                mosaic_img, mosaic_boxes, mosaic_labels = mosaic(   
-                                                                    img_paths,
-                                                                    {i: ann['bboxes'] for i, ann in enumerate(anns)},
-                                                                    {i: ann['labels'] for i, ann in enumerate(anns)}
-                                                                )
-                
-                # Only save mosaic images with annotations
-                if len(mosaic_boxes) != 0:
-                    mosaic_name = "mosaic_" + str(i) + ".PNG"
-                    mosaic_img.save(os.path.join(self.root, self.aug_path, mosaic_name))
-
-                    temp_dict['aug_images'].append(
-                                {
-                                    'id': image_id,
-                                    'file_name': mosaic_name,
-                                    'folder': self.aug_path,
-                                    'height': size[1],
-                                    'width': size[0]
-                                }
-                            )
-
-                    mosaic_areas = (mosaic_boxes[:, 3] - mosaic_boxes[:, 1]) * (mosaic_boxes[:, 2] - mosaic_boxes[:, 0])
-
-                    temp_dict['aug_annotations'][image_id] = {
-                                                                'image_id': image_id,
-                                                                'labels': mosaic_labels,
-                                                                'bboxes': mosaic_boxes.tolist(),
-                                                                'areas': mosaic_areas.tolist(),
-                                                                'iscrowd': np.zeros((len(labels),), dtype=np.int64).tolist()
-                                                            }
-
-                    image_id += 1
-
-        data_dict = temp_dict
-
-        # Write data to JSON file
-        json_object = json.dumps(data_dict, indent=4)
-        json_name = create_name("full", self.aug_flag, self.mix, self.chance, self.num_mosaics)
-        with open(os.path.join(self.root, self.out_path, json_name), "w") as outfile:
-            outfile.write(json_object)
-
-        # Split the data to train, val, test sets and write to separate JSONs
-        splitted_data = self.data_split(data_dict, mixed=self.mix, aug_flag=self.aug_flag)
-
-        names = ['train', 'test', 'val']
-        for i, dictionary in enumerate(splitted_data):
-            json_object = json.dumps(dictionary, indent=4)
-            file_name = create_name(names[i], self.aug_flag, self.mix, self.chance, self.num_mosaics)
-            with open(os.path.join(self.root, self.out_path, file_name), "w") as outfile:
-                outfile.write(json_object)
-
-
-    #TODO: Edit
-    def create_sets(self, images, annotations, split_index, second_split_index):
-        train_imgs = images[:split_index]
-        test_imgs = images[split_index:second_split_index]
-        val_imgs = images[second_split_index:]
-        train_ids = [img['id'] for img in train_imgs]
-        test_ids = [img['id'] for img in test_imgs]
-        val_ids = [img['id'] for img in val_imgs]
-
-        # Get annotations for all three sets
-        train_anns = {img_id: annotations[img_id] for img_id in train_ids}
-        test_anns = {img_id: annotations[img_id] for img_id in test_ids}
-        val_anns = {img_id: annotations[img_id] for img_id in val_ids}
-        
-        # Create the three dictionaries
-        train_dict =    {
-                            "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
-                            "images": train_imgs,
-                            "annotations": train_anns
-                        }
-        
-        test_dict =     {
-                            "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
-                            "images": test_imgs,
-                            "annotations": test_anns
-                        }
-
-        val_dict =      {
-                            "categories": [{"id": 1, "name": "damage"}, {"id": 2, "name": "dirt"}],
-                            "images": val_imgs,
-                            "annotations": val_anns
-                        }
-
-        return train_dict, test_dict, val_dict
-
-
-    # TODO: Edit
-    def data_split(self, data):
-        if self.aug_flag:
-
-            # If mixed flag, augmentations will be included in train, test and validation sets
-            if self.mix:
-                images = data['images'] + data['aug_images']
-                annotations = data['annotations'] | data['aug_annotations']
-                random.shuffle(images)
-                n = len(images)
-                split_index = int(self.train_split * n)
-                second_split_index = int(self.test_split * n) + split_index
-                train_dict, test_dict, val_dict = self.create_sets(images, annotations, split_index, second_split_index)
-        
-            # If not mixed flag, augmentations are only included in training set
-            else:
-                images = data['images']
-                random.shuffle(images)
-                aug_images = data['aug_images']
-                n = len(images) + len(aug_images)
-                split_index = int(self.train_split * n) - len(aug_images)
-                second_split_index = int(self.test_split * n) + split_index
-                train_dict, test_dict, val_dict = self.create_sets(images, data['annotations'], split_index, second_split_index)
-                train_dict['images'] += aug_images
-                train_dict['annotations'] = train_dict['annotations'] | data['aug_annotations'] 
-
-        else:
-            images = data['images']
             random.shuffle(images)
-            n = len(images)
-            split_index = int(self.train_split * n)
-            second_split_index = int(self.test_split * n) + split_index
-            train_dict, test_dict, val_dict = self.create_sets(images, data['annotations'], split_index, second_split_index)
 
-        return train_dict, test_dict, val_dict
+        # Get the split indexes given the train, test, val splits
+        n = len(images)
+        split_index = int(self.train_split * n)
+        second_split_index = int(self.test_split * n) + split_index
+
+        # Create all train, test, val img sets
+        train, test, val = [], [], []
+        for i in range(split_index):
+            train.append(colab_path + '/' + images[i][:-3] + "png")
+        
+        for i in range(split_index, second_split_index):
+            test.append(colab_path + '/' + images[i][:-3] + "png")
+        
+        for i in range(second_split_index, n):
+            val.append(colab_path + '/' + images[i][:-3] + "png")
+    
+        # Write to txt files
+        with open(os.path.join(out_path, 'train.txt'), 'w') as f:
+            f.write('\n'.join(train))
+
+        with open(os.path.join(out_path, 'test.txt'), 'w') as f:
+            f.write('\n'.join(test))
+        
+        with open(os.path.join(out_path, 'val.txt'), 'w') as f:
+            f.write('\n'.join(val))
 
 
-    # Save dataset to JSON file
+    # Save dataset to JSON file, assumption of dirt and damage classes
     def to_json(self, folder=None):
         non_aug_img_path = os.path.join(self.root, self.img_path)
         non_aug_label_path = os.path.join(self.root, self.label_path)
@@ -560,7 +245,6 @@ class DataProcessor():
                         }
         
         image_id = 0
-
         for img in os.listdir(non_aug_img_path):
             # See if there is a label for the image
             try:
@@ -638,7 +322,7 @@ class DataProcessor():
 
                     # Create data point of annotations
                     boxes = data[:, 1:]
-                    areas = boxes[:, 2] * boxes[:, 3]
+                    areas = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
                     data_dict['aug_annotations'][image_id] = {
                                                             'image_id': image_id,
                                                             'labels': data[:, 0].tolist(),
@@ -658,8 +342,126 @@ class DataProcessor():
         with open(os.path.join(self.root, 'eda_json.json'), "w") as outfile:
             outfile.write(json_object)
 
+    
+    # Save dataset to JSON file, assumption only damage data
+    def to_json_damageNT(self, file, folder):
+        non_aug_img_path = os.path.join(self.root, self.img_path)
+        non_aug_label_path = os.path.join(self.root, self.label_path)
 
-    # Split the image data into an annotated and non-annotated folder
+        if self.aug_flag:
+            aug_img_path = os.path.join(self.aug_root, folder, self.img_path)
+            aug_label_path = os.path.join(self.aug_root, folder, self.label_path)
+        
+        data_dict = {
+                        "categories": [{"id": 1, "name": "damage"}],
+                        "images": [],
+                        "annotations": {},
+                    }
+        
+        image_id = 0
+        with open(os.path.join(self.aug_root, folder, file), "r") as fd:
+            img_names = fd.read().splitlines()
+
+        for img_name in img_names:
+            img_name_stripped = img_name.split('/')[-1]
+
+            # Find the original label for the augmented images
+            if 'mosaic' in img_name or 'augmented' in img_name_stripped:
+                try:
+                    f = open(os.path.join(aug_label_path, img_name_stripped[:-4] + '.txt'), 'r')
+                    data = np.array([line.strip().split(" ") for line in f.readlines()]).astype(float)
+                    f.close()
+
+                except:
+                    print("NO LABEL FOUND FOR IMG:", img_name_stripped)
+                    continue
+
+                else:
+                    # Give the image a data point
+                    img_read = Image.open(os.path.join(aug_img_path, img_name_stripped))
+                    size = F.get_image_size(img_read)
+
+                    # Create data point of annotations
+                    boxes = yolo_to_voc(data[:, 1:], size)
+                    areas = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
+                    tbr_idx = [i for i in range(len(areas)) if areas[i] < 1]
+                    boxes = np.delete(boxes, tbr_idx, axis=0)
+                    areas = np.delete(areas, tbr_idx, axis=0)
+                    
+                    if len(boxes) != 0:
+                        data_dict['images'].append(
+                            {
+                                'id': image_id,
+                                'file_name': img_name_stripped,
+                                'root': self.aug_root,
+                                'height': size[1],
+                                'width': size[0]
+                            }
+                        )
+
+                        labels = data[:, 0]
+                        labels[labels == 0] = 1
+                        data_dict['annotations'][image_id] = {
+                                                                'image_id': image_id,
+                                                                'labels': labels.tolist(),
+                                                                'bboxes': boxes.tolist(),
+                                                                'areas': areas.tolist(),
+                                                                'iscrowd': [0 for _ in range(len(areas))]
+                                                            }
+
+                        image_id += 1
+            else:
+                try:
+                    f = open(os.path.join(non_aug_label_path, img_name_stripped[:-4] + '.txt'), 'r')
+                    data = np.array([line.strip().split(" ") for line in f.readlines()]).astype(float)
+                    f.close()
+                
+                # If there are no labels, only append image data
+                except:
+                    continue
+                else:
+                    # Give the image a data point
+                    img_read = Image.open(os.path.join(non_aug_img_path, img_name_stripped))
+                    size = F.get_image_size(img_read)
+
+                    # Create data point of annotations
+                    boxes = yolo_to_voc(data[:, 1:], size)
+                    areas = (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])
+                    tbr_idx = [i for i in range(len(areas)) if areas[i] < 1]    # Delete boxes with areas under 1
+                    boxes = np.delete(boxes, tbr_idx, axis=0)
+                    areas = np.delete(areas, tbr_idx, axis=0)
+
+                    if len(boxes) != 0:
+                        data_dict['images'].append(
+                                                {
+                                                    'id': image_id,
+                                                    'file_name': img_name_stripped,
+                                                    'root': self.root,
+                                                    'height': size[1],
+                                                    'width': size[0]
+                                                }
+                                            )
+
+                        labels = data[:, 0]
+                        labels[labels == 0] = 1
+
+                        data_dict['annotations'][image_id] = {
+                                                                'image_id': image_id,
+                                                                'labels': labels.tolist(),
+                                                                'bboxes': boxes.tolist(),
+                                                                'areas': areas.tolist(),
+                                                                'iscrowd': [0 for _ in range(len(areas))]
+                                                            }                                                    
+
+                        image_id += 1
+
+        # Write data to JSON file
+        json_object = json.dumps(data_dict, indent=4)
+        with open(os.path.join(self.aug_root, folder, file[:-4] + '.json'), "w") as outfile:
+            outfile.write(json_object)
+
+
+    # Split the image data into annotated and non-annotated folders
     def split_dataset(self, ann_folder: str, non_ann_folder: str):
         final_img_path = os.path.join(self.root, self.img_path)
         final_label_path = os.path.join(self.root, self.label_path)
@@ -668,11 +470,126 @@ class DataProcessor():
             try:
                 f = open(os.path.join(final_label_path, img[:-4] + '.txt'), 'r')
                 f.close()
-            
-            # If there are no labels, continue to next iteration
             except:
                 img_read = Image.open(os.path.join(self.root, self.img_path, img))
                 img_read.save(os.path.join(self.root, non_ann_folder, img))
             else:
                 img_read = Image.open(os.path.join(self.root, self.img_path, img))
                 img_read.save(os.path.join(self.root, ann_folder, img))
+
+
+    # Write to the fold files for the 'create_folds' function
+    def create_fold_files(self, out_path, folds, k):
+        for i in range(k): 
+            with open(os.path.join(out_path, f'fold_{i}_val.txt'), 'w') as f:
+                f.write('\n'.join(folds[i]))
+            
+            with open(os.path.join(out_path, f'fold_{i}_train.txt'), 'w') as f:
+                for j in range(k):
+                    if j != i:
+                        f.write('\n')
+                        f.write('\n'.join(folds[j]))
+
+
+    # Create k folds of a certain dataset
+    # Notebook path refers to path for YOLO labels
+    def create_folds(self, notebook_path: str, k=5, folder=None, test_set_split=0.2):
+        folds, test_set = [], []
+        
+        # In case of augmented images, use more steps for stratified splits
+        if self.aug_flag:
+            aug_images = []
+            out_path = os.path.join(self.aug_root, folder)
+
+            if not os.path.exists(out_path):
+                os.makedirs(out_path)
+
+            aug_images = os.listdir(os.path.join(out_path, self.img_path))
+
+            # If mixed, put augmented images in folds and test set
+            if self.mix:
+                images = os.listdir(os.path.join(self.root, self.img_path)) + aug_images
+                random.shuffle(images)
+
+                num_test_set = int(test_set_split * len(images))
+                for i in range(num_test_set):
+                    test_set.append(notebook_path + '/' + images[i][:-3] + "png")
+
+                with open(os.path.join(out_path, f'fold_test.txt'), 'w') as f:
+                    f.write('\n'.join(test_set))
+                
+                images = images[num_test_set:]
+                fold_len = len(images) // k
+
+                for i in range(k):
+                    fold = []
+                    for j in range(i * fold_len, (i + 1) * fold_len):
+                        fold.append(notebook_path + '/' + images[j][:-3] + "png")
+                    
+                    folds.append(fold)
+                
+            else:
+                random.shuffle(aug_images)
+                non_aug_images = os.listdir(os.path.join(self.root, self.img_path))
+                random.shuffle(non_aug_images)
+
+                num_test_set_nonaug = int(test_set_split * len(non_aug_images))
+                num_test_set_aug = int(test_set_split * len(aug_images))
+
+                for i in range(num_test_set_nonaug):
+                    test_set.append(notebook_path + '/' + non_aug_images[i][:-3] + "png")
+                
+                for i in range(num_test_set_aug):
+                    test_set.append(notebook_path + '/' + aug_images[i][:-3] + "png")
+
+                random.shuffle(test_set)
+                with open(os.path.join(out_path, f'fold_test.txt'), 'w') as f:
+                    f.write('\n'.join(test_set))
+
+                # Make stratified sets where augmented / non-augmented ratio is equal in every fold
+                non_aug_images = non_aug_images[num_test_set_nonaug:]
+                aug_images = aug_images[num_test_set_aug:]
+
+                fold_len = len(non_aug_images) // k
+                aug_fold_len = len(aug_images) // k
+
+                for i in range(k):
+                    fold = []
+                    for j in range(i * fold_len, (i + 1) * fold_len):
+                        fold.append(notebook_path + '/' + non_aug_images[j][:-3] + "png")
+
+                    for j in range(i * aug_fold_len, (i + 1) * aug_fold_len):
+                        fold.append(notebook_path + '/' + aug_images[j][:-3] + "png")
+
+                    random.shuffle(fold)
+                    folds.append(fold)
+
+        else:
+            if folder is None:
+                out_path = self.root
+            else:
+                out_path = os.path.join(self.root, folder)
+            
+            images = os.listdir(os.path.join(self.root, self.img_path))
+            random.shuffle(images)
+
+            num_test_set = int(test_set_split * len(images))
+
+            for i in range(num_test_set):
+                test_set.append(notebook_path + '/' + images[i][:-3] + "png")
+
+            with open(os.path.join(out_path, f'fold_test.txt'), 'w') as f:
+                f.write('\n'.join(test_set))
+
+            images = images[num_test_set:]
+            fold_len = len(images) // k
+
+            for i in range(k):
+                fold = []
+                for j in range(i * fold_len, (i + 1) * fold_len):
+                    fold.append(notebook_path + '/' + images[j][:-3] + "png")
+                
+                folds.append(fold)
+
+        # Write to files
+        self.create_fold_files(out_path, folds, k)

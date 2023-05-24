@@ -113,10 +113,6 @@ def augment(image_path: str, boxes: np.ndarray, labels: np.ndarray, flip_chance=
     # Flip horizontally
     if random.uniform(0, 1) > flip_chance:
         image, boxes = flip_hor(image, boxes)
-
-    # Change scale of image
-    # if random.uniform(0, 1) > scale_chance:
-    #     image, boxes, labels = scale_img(image, boxes, labels, scale=random.uniform(0.5, 1.5))
     
     # Adjust HSV and blur
     image = F.adjust_brightness(image, random.uniform(0.5, 1.5))
