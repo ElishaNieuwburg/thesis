@@ -6,6 +6,7 @@
 /output/
 /test.py
 /experiments/
+/.vscode
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
